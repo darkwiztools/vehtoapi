@@ -6,11 +6,15 @@ const AES_KEY = "RTO@N@1V@$U2024#";
 const ALG = "aes-128-ecb";
 
 function encrypt(text) {
-  const cipher = crypto.createCipheriv(ALG, Buffer.from(AES_KEY), null);
-  cipher.setAutoPadding(true);
-  let encrypted = cipher.update(text, "utf8", "base64");
-  encrypted += cipher.final("base64");
-  return encrypted;
+  try {
+    const cipher = crypto.createCipheriv(ALG, Buffer.from(AES_KEY), null);
+    cipher.setAutoPadding(true);
+    let enc = cipher.update(text.trim(), "utf8", "base64");
+    enc += cipher.final("base64");
+    return enc;
+  } catch (e) {
+    return null;
+  }
 }
 
 function decrypt(base64) {
@@ -26,38 +30,55 @@ function decrypt(base64) {
 }
 
 export default async function handler(req, res) {
-  const vehicle_number = req.query.vehicle_number;
-
-  if (!vehicle_number) {
-    return res.json({ error: "Please provide ?vehicle_number=HR51AY5287" });
-  }
-
   try {
-    const encrypted = encrypt(vehicle_number);
+    const number =
+      req.query.vehicle_number ||
+      req.query.num ||
+      req.query.v ||
+      req.query.no;
+
+    if (!number) {
+      return res.status(400).json({
+        error: true,
+        message:
+          "Vehicle number missing — use ?vehicle_number=MH14DL1234",
+        sample: req.url + "?vehicle_number=HR51AY5287",
+      });
+    }
+
+    const encrypted = encrypt(number);
+    if (!encrypted) return res.json({ error: "Encryption error" });
+
     const fd = new FormData();
     fd.append("4svShi1T5ftaZPNNHhJzig===", encrypted);
 
-    const { data } = await axios.post(
-      "https://rcdetailsapi.vehicleinfo.app/api/vasu_rc_doc_details",
-      fd,
-      { headers: fd.getHeaders() }
-    );
+    const apiURL =
+      "https://rcdetailsapi.vehicleinfo.app/api/vasu_rc_doc_details";
+
+    const { data } = await axios.post(apiURL, fd, {
+      headers: fd.getHeaders(),
+      timeout: 20000,
+    });
 
     const dec = decrypt(data);
+
     const mobile = dec?.data?.[0]?.mobile_no;
 
-    if (!mobile) return res.json({ error: "Details not found" });
+    if (!mobile) return res.status(404).json({ error: "Details not found" });
 
     return res.json({
       success: true,
       result: {
-        vehicle_no: vehicle_number.toUpperCase(),
+        vehicle_no: number.toUpperCase(),
         mobile_no: mobile,
         credit: "Bajrangi API",
-        developer: "Bajrangi API"
-      }
+        developer: "Bajrangi API",
+      },
     });
-  } catch (e) {
-    return res.json({ error: "API not working" });
+  } catch (err) {
+    return res.status(500).json({
+      error: true,
+      message: "API not working or Timeout",
+    });
   }
 }
