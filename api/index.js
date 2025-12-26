@@ -26,10 +26,11 @@ function decrypt(base64) {
 }
 
 export default async function handler(req, res) {
-  const { vehicle_number } = req.query;
+  const vehicle_number = req.query.vehicle_number;
 
-  if (!vehicle_number)
+  if (!vehicle_number) {
     return res.json({ error: "Please provide ?vehicle_number=HR51AY5287" });
+  }
 
   try {
     const encrypted = encrypt(vehicle_number);
@@ -56,8 +57,7 @@ export default async function handler(req, res) {
         developer: "Bajrangi API"
       }
     });
-
-  } catch {
+  } catch (e) {
     return res.json({ error: "API not working" });
   }
 }
